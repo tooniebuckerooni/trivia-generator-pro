@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trivia Generator Pro — Build &amp; Print Custom Trivia Games</title>
+<meta name="description" content="Build fully branded pub-trivia games in minutes. Download host packets, question sheets, matching blank answer sheets, and score sheets as print-ready PDFs.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f0b429'/%3E%3Ctext x='32' y='44' font-size='36' font-family='Georgia' font-weight='bold' text-anchor='middle' fill='%23151c30'%3E%3F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="30" fill="#f0b429"/>
+      <text x="32" y="44" font-size="36" font-family="Georgia, serif" font-weight="bold" text-anchor="middle" fill="#151c30">?</text>
+    </svg>
+    <div>
+      <h1>Trivia Generator Pro</h1>
+      <p class="tagline">Build it. Brand it. Print it. Host it.</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-sample" class="btn btn-ghost" title="Load a ready-to-play 3-round demo game">⚡ Load Sample Game</button>
+    <button id="btn-export" class="btn btn-ghost" title="Save this game as a file you can reload later">💾 Save Game File</button>
+    <button id="btn-import" class="btn btn-ghost" title="Load a previously saved game file">📂 Open Game File</button>
+    <input type="file" id="import-file" accept=".json,.tgp" hidden>
+    <button id="btn-reset" class="btn btn-ghost btn-danger" title="Clear everything and start over">🗑 Reset</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ============ LEFT: SETTINGS ============ -->
+  <aside class="settings">
+
+    <section class="card" data-collapse>
+      <h2 class="card-title">🎲 Game Details</h2>
+      <div class="card-body">
+        <label>Game Title
+          <input id="g-title" type="text" placeholder="Thursday Night Trivia" maxlength="60">
+        </label>
+        <label>Subtitle / Venue <span class="hint">(optional)</span>
+          <input id="g-subtitle" type="text" placeholder="Live at The Rusty Anchor" maxlength="80">
+        </label>
+        <div class="row2">
+          <label>Date <span class="hint">(optional)</span>
+            <input id="g-date" type="text" placeholder="June 12, 2026" maxlength="40">
+          </label>
+          <label>Host <span class="hint">(optional)</span>
+            <input id="g-host" type="text" placeholder="Hosted by Dusty" maxlength="40">
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" data-collapse>
+      <h2 class="card-title">🏷 Branding</h2>
+      <div class="card-body">
+        <label>Logo <span class="hint">(PNG or JPG, shows on every page)</span></label>
+        <div class="logo-zone">
+          <div id="logo-preview" class="logo-preview empty">No logo</div>
+          <div class="logo-btns">
+            <button id="btn-logo" class="btn btn-small">Upload Logo</button>
+            <button id="btn-logo-clear" class="btn btn-small btn-ghost" hidden>Remove</button>
+          </div>
+          <input type="file" id="logo-file" accept=".png,.jpg,.jpeg" hidden>
+        </div>
+        <label>Business / Host Name
+          <input id="b-org" type="text" placeholder="Your company name" maxlength="60">
+        </label>
+        <label>Tagline <span class="hint">(optional)</span>
+          <input id="b-tagline" type="text" placeholder="Games • Trivia • Music Bingo" maxlength="80">
+        </label>
+        <label>Website or Social <span class="hint">(appears in page footers)</span>
+          <input id="b-website" type="text" placeholder="www.yoursite.com" maxlength="60">
+        </label>
+        <div class="row2">
+          <label>Accent Color
+            <span class="color-wrap"><input id="b-accent" type="color" value="#d94f4f"><code id="accent-code">#d94f4f</code></span>
+          </label>
+          <label>PDF Font
+            <select id="b-font">
+              <option value="helvetica">Modern (Helvetica)</option>
+              <option value="times">Classic (Times)</option>
+              <option value="courier">Retro (Typewriter)</option>
+            </select>
+          </label>
+        </div>
+        <label class="check"><input id="b-credit" type="checkbox"> Show “Made with Trivia Generator Pro” credit in footer</label>
+      </div>
+    </section>
+
+    <section class="card" data-collapse>
+      <h2 class="card-title">⚙️ Output Options</h2>
+      <div class="card-body">
+        <div class="row2">
+          <label>Paper Size
+            <select id="o-pagesize">
+              <option value="letter">US Letter</option>
+              <option value="a4">A4</option>
+            </select>
+          </label>
+          <label>Score Sheet Teams
+            <input id="o-teams" type="number" min="4" max="24" step="1" value="12">
+          </label>
+        </div>
+        <label class="check"><input id="o-points" type="checkbox" checked> Show point values on PDFs</label>
+        <label class="check"><input id="o-half" type="checkbox"> Half-page answer sheets <span class="hint">(2 per page — saves paper)</span></label>
+        <label class="check"><input id="o-tb" type="checkbox" checked> Include tiebreaker question</label>
+        <div id="tb-fields">
+          <label>Tiebreaker Question <span class="hint">(closest answer wins)</span>
+            <textarea id="tb-q" rows="2" placeholder="How many feet tall is the Statue of Liberty, heel to torch?"></textarea>
+          </label>
+          <label>Tiebreaker Answer
+            <input id="tb-a" type="text" placeholder="151 feet" maxlength="120">
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card downloads">
+      <h2 class="card-title">📄 Your PDFs</h2>
+      <div class="card-body">
+        <div class="dl-row">
+          <div class="dl-info"><strong>Host Packet</strong><span>Cover page + every question <em>with answers</em></span></div>
+          <div class="dl-btns"><button class="btn btn-small btn-ghost" data-preview="host">👁</button><button class="btn btn-small btn-accent" data-download="host">Download</button></div>
+        </div>
+        <div class="dl-row">
+          <div class="dl-info"><strong>Question Packet</strong><span>Questions only — for a co-host or reader</span></div>
+          <div class="dl-btns"><button class="btn btn-small btn-ghost" data-preview="questions">👁</button><button class="btn btn-small btn-accent" data-download="questions">Download</button></div>
+        </div>
+        <div class="dl-row">
+          <div class="dl-info"><strong>Answer Sheets</strong><span>Blank team sheets matching every round</span></div>
+          <div class="dl-btns"><button class="btn btn-small btn-ghost" data-preview="sheets">👁</button><button class="btn btn-small btn-accent" data-download="sheets">Download</button></div>
+        </div>
+        <div class="dl-row">
+          <div class="dl-info"><strong>Score Sheet</strong><span>Host scoring grid, one row per team</span></div>
+          <div class="dl-btns"><button class="btn btn-small btn-ghost" data-preview="scores">👁</button><button class="btn btn-small btn-accent" data-download="scores">Download</button></div>
+        </div>
+        <button id="btn-all" class="btn btn-gold btn-block">⬇ Download Complete Game Kit</button>
+        <p class="hint center">👁 = preview in a new tab before downloading</p>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- ============ RIGHT: ROUNDS BUILDER ============ -->
+  <section class="builder">
+    <div class="builder-head">
+      <h2>Rounds &amp; Questions</h2>
+      <div id="stats" class="stats"></div>
+      <button id="btn-add-round" class="btn btn-accent">+ Add Round</button>
+    </div>
+    <div id="rounds"></div>
+  </section>
+
+</main>
+
+<footer class="pagefoot">
+  <p>Trivia Generator Pro — free &amp; open source. Everything runs in your browser; your game never leaves your computer.</p>
+</footer>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="js/samples.js"></script>
+<script src="js/pdfgen.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

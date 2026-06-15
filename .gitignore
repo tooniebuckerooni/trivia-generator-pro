@@ -2,3 +2,8 @@ Thumbs.db
 Desktop.ini
 *.log
 _test/
+
+# listing-copy (Next.js)
+listing-copy/.next/
+listing-copy/node_modules/
+listing-copy/.env.local

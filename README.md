@@ -2,7 +2,7 @@
 
 **Build it. Brand it. Print it. Host it.**
 
-A free, browser-based trivia game builder for pub-trivia hosts, fundraisers, office parties, and event entertainers. Build your rounds, drop in your branding, and download a complete print-ready game kit as PDFs — no accounts, no servers, no setup. Everything runs in your browser and your game never leaves your computer.
+A free, browser-based trivia game builder for pub-trivia hosts, fundraisers, office parties, and event entertainers. Build your rounds, drop in your branding, and download a complete print-ready game kit as PDFs — no accounts, no servers, no setup. Print it and you're done: the whole night runs on paper, with no wifi, laptop, or app required at the table.
 
 **▶ Use it now:** https://tooniebuckerooni.github.io/trivia-generator-pro/
 
@@ -25,8 +25,12 @@ Every game exports as a matched, branded set of PDFs:
 - **Branding** — upload your logo, set your business name, tagline, website, accent color, and PDF font; everything appears on every page
 - **Sample question packs** — 8 categories of ready-made questions; fill any round with one click, or load a complete 3-round sample game to see how it all works
 - **Paper-saver mode** — print answer sheets two-per-page with a cut line
-- **US Letter or A4**, live PDF preview before downloading
+- **US Letter or A4**, instant PDF preview before downloading
 - **Autosave** — your game is saved in your browser as you type; you can also save/load game files (`.tgp.json`) to keep a library of games
+
+## Why print-first
+
+This tool is for the work that happens *before* trivia night: writing questions, branding the packet, hitting print. Once the PDFs are downloaded, running the show is deliberately low-tech — paper, a pen, and a host. That's the point, not a gap: no wifi dependency, nothing for teams to install, nothing to troubleshoot mid-show. Features that would require a screen or connection during the event itself — live scoreboards, a presenter/display mode, QR-code check-ins — are intentionally out of scope.
 
 ## Running it yourself
 

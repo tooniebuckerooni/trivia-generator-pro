@@ -32,6 +32,20 @@ Every game exports as a matched, branded set of PDFs:
 
 This tool is for the work that happens *before* trivia night: writing questions, branding the packet, hitting print. Once the PDFs are downloaded, running the show is deliberately low-tech — paper, a pen, and a host. That's the point, not a gap: no wifi dependency, nothing for teams to install, nothing to troubleshoot mid-show. Features that would require a screen or connection during the event itself — live scoreboards, a presenter/display mode, QR-code check-ins — are intentionally out of scope.
 
+## AI Question Generator (optional paid add-on)
+
+Everything above is free, unlimited, and stays in your browser. On top of
+it, there's an optional add-on: type a topic and get back a themed round
+of AI-generated questions, gated by a LemonSqueezy license and metered per
+month. It's entirely separate from the core app — the free product doesn't
+change, require a license, or need this add-on to function.
+
+Setup for anyone deploying this themselves: the add-on needs a small
+Cloudflare Worker (`worker.js` at the repo root — deploy instructions are
+in its header comment) plus a LemonSqueezy product with subscription
+variants. Without a Worker deployed, the "AI Question Generator" panel in
+the app just stays inactive — no errors, no effect on the free features.
+
 ## Running it yourself
 
 It's a static site — no build step, no dependencies to install.

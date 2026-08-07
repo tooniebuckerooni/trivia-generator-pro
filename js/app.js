@@ -249,6 +249,7 @@
           '<span class="spacer"></span>' +
           '<select class="fill-cat" title="Sample category">' + cats + "</select>" +
           '<button class="btn btn-small" data-act="fill" title="Append 10 ready-made questions">+ 10 Samples</button>' +
+          '<button class="btn btn-small btn-ai" data-act="ai-fill" title="Generate 10 AI questions for this round’s topic">✨ AI Generate 10</button>' +
         "</div>" +
       "</div></div>";
   }
@@ -294,6 +295,35 @@
   function addRound() {
     state.rounds.push(blankRound("", 10));
     renderRounds(); save();
+  }
+
+  function aiFillRound(r, btn) {
+    const topic = r.name.trim();
+    if (!topic) { toast("Give this round a category/topic first, then generate."); return; }
+    if (!window.TGP_AI) { toast("AI generator didn't load — try refreshing."); return; }
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = "Generating…";
+    TGP_AI.generateForRound(topic, 10)
+      .then(questions => {
+        const fresh = questions
+          .map(x => ({ q: String((x && x.question) || "").trim(), a: String((x && x.answer) || "").trim() }))
+          .filter(x => x.q && x.a);
+        if (!fresh.length) { toast("AI didn't return any usable questions — try again."); return; }
+        /* fill empty rows first, then append — same pattern as sample-fill */
+        let fi = 0;
+        r.questions.forEach(q => {
+          if (fi < fresh.length && !q.q.trim() && !q.a.trim()) {
+            q.q = fresh[fi].q; q.a = fresh[fi].a; fi++;
+          }
+        });
+        while (fi < fresh.length) r.questions.push(fresh[fi++]);
+        r.open = true;
+        renderRounds(); save();
+        toast("Added " + fresh.length + " AI-generated questions.");
+      })
+      .catch(err => toast(err.message || "AI generation failed."))
+      .finally(() => { btn.disabled = false; btn.textContent = original; });
   }
 
   function bindRounds() {
@@ -364,6 +394,10 @@
         if (!r.name.trim()) r.name = cat;
         r.open = true;
         toast("Added " + fresh.length + " " + cat + " questions.");
+      }
+      else if (act === "ai-fill") {
+        aiFillRound(r, btn);
+        return; /* async — aiFillRound does its own renderRounds()/save() */
       }
       else if (act === "qup" || act === "qdel") {
         const qi = Number(btn.dataset.q);
@@ -527,4 +561,5 @@
   bindRounds();
   bindDownloads();
   bindToolbar();
+  if (window.TGP_AI) TGP_AI.init();
 })();

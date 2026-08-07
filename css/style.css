@@ -70,6 +70,15 @@ body {
 .btn-block { display: block; width: 100%; margin-top: 12px; padding: 12px; }
 .btn-icon { padding: 4px 8px; font-size: 13px; line-height: 1; background: transparent; border-color: transparent; }
 .btn-icon:hover { background: rgba(255,255,255,.08); border-color: transparent; }
+.btn-ai {
+  background: linear-gradient(180deg, var(--gold), var(--gold-dark));
+  border-color: var(--gold-dark);
+  color: #1b1503;
+}
+.btn-ai:hover { filter: brightness(1.07); background: linear-gradient(180deg, var(--gold), var(--gold-dark)); }
+.btn-ai:disabled { opacity: .6; cursor: default; filter: none; }
+.ai-active { color: var(--ok); font-size: 12.5px; margin: 6px 0 0; }
+.ai-error { color: var(--danger); font-size: 12.5px; margin: 6px 0 0; }
 
 /* ---------- layout ---------- */
 .layout {

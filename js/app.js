@@ -6,14 +6,39 @@
 
   /* ---------- state ---------- */
 
-  const blankQ = () => ({ q: "", a: "" });
+  const blankQ = () => ({ q: "", a: "", choices: null });
   const blankRound = (name, n) => ({
     name: name || "",
     type: "standard",
+    format: "open", /* "open" | "tf" | "mc" — answer format for this round's questions */
     points: 10,
     open: true,
     questions: Array.from({ length: n || 10 }, blankQ)
   });
+
+  /* Switching a round's answer format migrates existing questions rather
+     than wiping them: open->mc keeps whatever was in `a` as choice A. */
+  function setRoundFormat(r, format) {
+    if (!["open", "tf", "mc"].includes(format)) format = "open";
+    r.format = format;
+    r.questions.forEach(q => {
+      if (format === "tf") {
+        q.choices = ["True", "False"];
+        /* Only default an answer for rows that already have content —
+           defaulting truly blank rows to "True" would make them look
+           filled-in everywhere blank-ness is checked (stats, audit, PDFs). */
+        const hasContent = q.q.trim() || q.a.trim();
+        if (hasContent && q.a !== "True" && q.a !== "False") q.a = "True";
+        else if (!hasContent) q.a = "";
+      } else if (format === "mc") {
+        if (!Array.isArray(q.choices) || q.choices.length !== 4) {
+          q.choices = [q.a || "", "", "", ""];
+        }
+      } else {
+        q.choices = null;
+      }
+    });
+  }
 
   const DEFAULT_STATE = () => ({
     game: { title: "", subtitle: "", date: "", host: "" },
@@ -69,10 +94,14 @@
         ? obj.rounds.map(r => ({
             name: r.name || "",
             type: ["standard", "double", "wager"].includes(r.type) ? r.type : "standard",
+            format: ["open", "tf", "mc"].includes(r.format) ? r.format : "open",
             points: Number(r.points) || 10,
             open: r.open !== false,
             questions: Array.isArray(r.questions) && r.questions.length
-              ? r.questions.map(q => ({ q: String(q.q || ""), a: String(q.a || "") }))
+              ? r.questions.map(q => ({
+                  q: String(q.q || ""), a: String(q.a || ""),
+                  choices: Array.isArray(q.choices) ? q.choices.map(x => String(x || "")) : null
+                }))
               : [blankQ()]
           }))
         : d.rounds
@@ -209,20 +238,56 @@
 
   /* ---------- rounds rendering ---------- */
 
-  function qRowHtml(q, qi) {
-    return '<div class="q-row">' +
-      '<span class="q-num">' + (qi + 1) + '</span>' +
-      '<textarea rows="1" data-field="q" data-q="' + qi + '" placeholder="Question…">' + esc(q.q) + '</textarea>' +
-      '<textarea rows="1" data-field="a" data-q="' + qi + '" placeholder="Answer">' + esc(q.a) + '</textarea>' +
-      '<span class="q-acts">' +
+  function qRowHtml(q, qi, ri, format) {
+    const num = '<span class="q-num">' + (qi + 1) + '</span>';
+    const acts = '<span class="q-acts">' +
       '<button class="btn btn-icon" data-act="qup" data-q="' + qi + '" title="Move up">↑</button>' +
       '<button class="btn btn-icon" data-act="qdel" data-q="' + qi + '" title="Delete question">✕</button>' +
-      '</span></div>';
+      '</span>';
+
+    if (format === "tf") {
+      return '<div class="q-row q-row-tf">' + num +
+        '<textarea rows="1" data-field="q" data-q="' + qi + '" placeholder="Statement…">' + esc(q.q) + '</textarea>' +
+        '<span class="tf-toggle">' +
+          '<button type="button" class="tf-btn' + (q.a === "True" ? " active" : "") + '" data-act="tfset" data-q="' + qi + '" data-val="True">True</button>' +
+          '<button type="button" class="tf-btn' + (q.a === "False" ? " active" : "") + '" data-act="tfset" data-q="' + qi + '" data-val="False">False</button>' +
+        '</span>' + acts + '</div>';
+    }
+
+    if (format === "mc") {
+      const choices = Array.isArray(q.choices) && q.choices.length === 4 ? q.choices : ["", "", "", ""];
+      const choicesHtml = choices.map((ch, ci) =>
+        '<label class="q-choice">' +
+          '<input type="radio" name="correct-' + ri + '-' + qi + '" data-act="mccorrect" data-q="' + qi + '" data-idx="' + ci + '"' + (ch !== "" && ch === q.a ? " checked" : "") + '>' +
+          '<input type="text" class="choice-text" data-field="choice" data-q="' + qi + '" data-idx="' + ci + '" placeholder="Choice ' + String.fromCharCode(65 + ci) + '" value="' + esc(ch) + '">' +
+        '</label>'
+      ).join("");
+      return '<div class="q-row q-row-mc">' + num +
+        '<div class="q-row-main">' +
+          '<textarea rows="1" data-field="q" data-q="' + qi + '" placeholder="Question…">' + esc(q.q) + '</textarea>' +
+          '<div class="q-choices">' + choicesHtml + '</div>' +
+        '</div>' + acts + '</div>';
+    }
+
+    return '<div class="q-row">' + num +
+      '<textarea rows="1" data-field="q" data-q="' + qi + '" placeholder="Question…">' + esc(q.q) + '</textarea>' +
+      '<textarea rows="1" data-field="a" data-q="' + qi + '" placeholder="Answer">' + esc(q.a) + '</textarea>' +
+      acts + '</div>';
   }
+
+  const AI_MODES = [
+    ["topic", "Single Topic"],
+    ["mixed", "Mixed Categories"],
+    ["lightning", "Lightning (quick-fire)"],
+    ["list", "List Round"],
+    ["connections", "Connections (find the link)"]
+  ];
 
   function roundHtml(r, i) {
     const cats = Object.keys(TGP_SAMPLES)
       .map(cat => '<option value="' + esc(cat) + '">' + esc(cat) + "</option>").join("");
+    const modeOpts = AI_MODES.map(([v, label]) => '<option value="' + v + '">' + label + "</option>").join("");
+    const format = r.format || "open";
     return '<div class="round' + (r.open ? "" : " closed") + '" data-r="' + i + '">' +
       '<div class="round-head">' +
         '<div class="round-num">' + (i + 1) + "</div>" +
@@ -231,6 +296,11 @@
           '<option value="standard"' + (r.type === "standard" ? " selected" : "") + ">Standard</option>" +
           '<option value="double"' + (r.type === "double" ? " selected" : "") + ">Double Points</option>" +
           '<option value="wager"' + (r.type === "wager" ? " selected" : "") + ">Wager Round</option>" +
+        "</select>" +
+        '<select class="r-format" data-field="format" title="Answer format">' +
+          '<option value="open"' + (format === "open" ? " selected" : "") + ">Open-ended</option>" +
+          '<option value="tf"' + (format === "tf" ? " selected" : "") + ">True / False</option>" +
+          '<option value="mc"' + (format === "mc" ? " selected" : "") + ">Multiple Choice</option>" +
         "</select>" +
         '<span class="pts-wrap">pts/q <input type="number" class="r-pts" data-field="points" min="1" max="999" value="' + esc(r.points) + '"></span>' +
         '<div class="round-tools">' +
@@ -243,14 +313,20 @@
         "</div>" +
       "</div>" +
       '<div class="round-body">' +
-        r.questions.map(qRowHtml).join("") +
+        r.questions.map((q, qi) => qRowHtml(q, qi, i, format)).join("") +
         '<div class="round-foot">' +
           '<button class="btn btn-small" data-act="addq">+ Add Question</button>' +
           '<span class="spacer"></span>' +
           '<select class="fill-cat" title="Sample category">' + cats + "</select>" +
           '<button class="btn btn-small" data-act="fill" title="Append 10 ready-made questions">+ 10 Samples</button>' +
-          '<button class="btn btn-small btn-ai" data-act="ai-fill" title="Generate 10 AI questions for this round’s topic">✨ AI Generate 10</button>' +
         "</div>" +
+        '<div class="round-foot round-foot-ai">' +
+          '<select class="ai-mode" title="Content style">' + modeOpts + "</select>" +
+          '<button class="btn btn-small btn-ai" data-act="ai-fill" title="Generate 10 AI questions for this round">✨ AI Generate 10</button>' +
+          '<span class="spacer"></span>' +
+          '<button class="btn btn-small btn-ai" data-act="ai-suggest" title="Spin up 5 AI category ideas">🎰 Spin Categories</button>' +
+        "</div>" +
+        '<div class="ai-suggest-tray" hidden></div>' +
       "</div></div>";
   }
 
@@ -297,24 +373,33 @@
     renderRounds(); save();
   }
 
-  function aiFillRound(r, btn) {
+  function aiFillRound(r, btn, roundEl) {
+    const modeSel = roundEl.querySelector(".ai-mode");
+    const mode = modeSel ? modeSel.value : "topic";
+    const needsTopic = mode === "topic" || mode === "lightning" || mode === "list";
     const topic = r.name.trim();
-    if (!topic) { toast("Give this round a category/topic first, then generate."); return; }
+    if (needsTopic && !topic) { toast("Give this round a category/topic first, then generate."); return; }
     if (!window.TGP_AI) { toast("AI generator didn't load — try refreshing."); return; }
+    const format = r.format || "open";
     btn.disabled = true;
     const original = btn.textContent;
     btn.textContent = "Generating…";
-    TGP_AI.generateForRound(topic, 10)
+    TGP_AI.generateForRound(topic, { mode, format, count: 10 })
       .then(questions => {
-        const fresh = questions
-          .map(x => ({ q: String((x && x.question) || "").trim(), a: String((x && x.answer) || "").trim() }))
-          .filter(x => x.q && x.a);
+        const fresh = questions.map(x => {
+          const q = String((x && x.question) || "").trim();
+          const a = String((x && x.answer) || "").trim();
+          const choices = format === "mc" && Array.isArray(x && x.choices)
+            ? x.choices.map(c => String(c || "").trim()).filter(Boolean)
+            : (format === "tf" ? ["True", "False"] : null);
+          return { q, a, choices };
+        }).filter(x => x.q && x.a && (format !== "mc" || (x.choices && x.choices.length === 4)));
         if (!fresh.length) { toast("AI didn't return any usable questions — try again."); return; }
         /* fill empty rows first, then append — same pattern as sample-fill */
         let fi = 0;
         r.questions.forEach(q => {
           if (fi < fresh.length && !q.q.trim() && !q.a.trim()) {
-            q.q = fresh[fi].q; q.a = fresh[fi].a; fi++;
+            q.q = fresh[fi].q; q.a = fresh[fi].a; q.choices = fresh[fi].choices; fi++;
           }
         });
         while (fi < fresh.length) r.questions.push(fresh[fi++]);
@@ -324,6 +409,39 @@
       })
       .catch(err => toast(err.message || "AI generation failed."))
       .finally(() => { btn.disabled = false; btn.textContent = original; });
+  }
+
+  /* ---------- AI category spinner ---------- */
+
+  function renderSuggestTray(roundEl, spinning, categories) {
+    const tray = roundEl.querySelector(".ai-suggest-tray");
+    if (!tray) return;
+    tray.hidden = false;
+    if (spinning) {
+      tray.innerHTML = Array.from({ length: 5 }, (_, i) =>
+        '<span class="chip chip-spin" style="animation-delay:' + (i * 70) + 'ms">?</span>'
+      ).join("");
+      return;
+    }
+    tray.innerHTML = categories.map((cat, i) =>
+      '<span class="chip chip-landed" style="animation-delay:' + (i * 70) + 'ms" data-cat="' + esc(cat) + '">' +
+        '<button type="button" class="chip-text" data-act="usecat">' + esc(cat) + '</button>' +
+        '<button type="button" class="chip-spin-btn" data-act="spincat" title="Spin categories related to this one">🔀</button>' +
+      '</span>'
+    ).join("") + '<button type="button" class="chip-reset" data-act="respin">🔄 Shuffle again</button>';
+  }
+
+  function spinCategories(r, roundEl, seed) {
+    if (!window.TGP_AI) { toast("AI generator didn't load — try refreshing."); return; }
+    renderSuggestTray(roundEl, true);
+    const avoid = state.rounds.map(x => x.name.trim()).filter(Boolean);
+    TGP_AI.suggestCategories(seed || "", avoid)
+      .then(categories => renderSuggestTray(roundEl, false, categories))
+      .catch(err => {
+        const tray = roundEl.querySelector(".ai-suggest-tray");
+        if (tray) tray.hidden = true;
+        toast(err.message || "Couldn't get suggestions.");
+      });
   }
 
   function bindRounds() {
@@ -340,6 +458,14 @@
         const q = r.questions[Number(el.dataset.q)];
         if (q) q[f] = el.value;
         autosize(el);
+      } else if (f === "choice") {
+        const q = r.questions[Number(el.dataset.q)];
+        const idx = Number(el.dataset.idx);
+        if (q && Array.isArray(q.choices)) {
+          const wasCorrect = q.choices[idx] !== "" && q.choices[idx] === q.a;
+          q.choices[idx] = el.value;
+          if (wasCorrect) q.a = el.value;
+        }
       } else if (f === "name") r.name = el.value;
       else if (f === "points") r.points = Math.max(1, Number(el.value) || 10);
       updateStats(); save();
@@ -347,10 +473,16 @@
 
     box.addEventListener("change", e => {
       const el = e.target;
-      if (el.dataset.field !== "type") return;
       const roundEl = el.closest(".round");
       const r = state.rounds[Number(roundEl.dataset.r)];
-      if (r) { r.type = el.value; updateStats(); save(); }
+      if (!r) return;
+      if (el.dataset.field === "type") { r.type = el.value; updateStats(); save(); }
+      else if (el.dataset.field === "format") { setRoundFormat(r, el.value); renderRounds(); save(); }
+      else if (el.dataset.act === "mccorrect") {
+        const q = r.questions[Number(el.dataset.q)];
+        const idx = Number(el.dataset.idx);
+        if (q && Array.isArray(q.choices)) { q.a = q.choices[idx] || ""; save(); }
+      }
     });
 
     box.addEventListener("click", e => {
@@ -396,8 +528,26 @@
         toast("Added " + fresh.length + " " + cat + " questions.");
       }
       else if (act === "ai-fill") {
-        aiFillRound(r, btn);
+        aiFillRound(r, btn, roundEl);
         return; /* async — aiFillRound does its own renderRounds()/save() */
+      }
+      else if (act === "ai-suggest" || act === "respin") {
+        spinCategories(r, roundEl, "");
+        return; /* async, and the tray is ephemeral UI — not part of saved state */
+      }
+      else if (act === "spincat") {
+        const seed = btn.closest(".chip").dataset.cat;
+        spinCategories(r, roundEl, seed);
+        return;
+      }
+      else if (act === "usecat") {
+        r.name = btn.closest(".chip").dataset.cat;
+        renderRounds(); save();
+        return;
+      }
+      else if (act === "tfset") {
+        const q = r.questions[Number(btn.dataset.q)];
+        if (q) { q.a = btn.dataset.val; q.choices = ["True", "False"]; }
       }
       else if (act === "qup" || act === "qdel") {
         const qi = Number(btn.dataset.q);

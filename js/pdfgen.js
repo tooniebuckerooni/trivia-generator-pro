@@ -111,9 +111,13 @@ const TGP_PDF = (() => {
       .map(r => ({
         name: (r.name || "").trim(),
         type: r.type || "standard",
+        format: r.format || "open",
         points: Math.max(1, Number(r.points) || 10),
         questions: r.questions
-          .map(q => ({ q: (q.q || "").trim(), a: (q.a || "").trim() }))
+          .map(q => ({
+            q: (q.q || "").trim(), a: (q.a || "").trim(),
+            choices: Array.isArray(q.choices) ? q.choices.map(x => String(x || "").trim()) : null
+          }))
           .filter(q => q.q || q.a)
       }))
       .filter(r => r.questions.length > 0);
@@ -253,10 +257,16 @@ const TGP_PDF = (() => {
       }
       r.questions.forEach((q, qi) => {
         const qLines = doc.splitTextToSize(q.q || "(no question text)", qW);
-        const aLines = withAnswers
+        const hasChoices = Array.isArray(q.choices) && q.choices.length > 0;
+        const choiceLines = hasChoices
+          ? q.choices.map((ch, ci) => doc.splitTextToSize(String.fromCharCode(65 + ci) + ")  " + (ch || "—"), qW - 6))
+          : [];
+        const aLines = (withAnswers && !hasChoices)
           ? doc.splitTextToSize("Answer:  " + (q.a || "—"), qW)
           : [];
-        const blockH = qLines.length * lh(11) + (withAnswers ? aLines.length * lh(10) + 1.5 : 0) + 6.5;
+        const choiceH = choiceLines.reduce((s, lines) => s + lines.length * lh(10) + 0.8, 0) + (hasChoices ? 1.5 : 0);
+        const blockH = qLines.length * lh(11) + choiceH +
+          (withAnswers && !hasChoices ? aLines.length * lh(10) + 1.5 : 0) + 6.5;
         if (y + blockH > H - 18) {
           doc.addPage();
           y = pageHeader(c);
@@ -266,7 +276,19 @@ const TGP_PDF = (() => {
         doc.text((qi + 1) + ".", M + 6, y, { align: "right" });
         setF(c, "normal", 11, [35, 35, 35]);
         qLines.forEach(t => { doc.text(t, qX, y); y += lh(11); });
-        if (withAnswers) {
+        if (hasChoices) {
+          y += 1.5;
+          const correctIdx = q.choices.findIndex(ch => ch.toLowerCase() === q.a.toLowerCase());
+          choiceLines.forEach((lines, ci) => {
+            const isCorrect = withAnswers && ci === correctIdx;
+            setF(c, isCorrect ? "bold" : "normal", 10, isCorrect ? c.accent : [90, 90, 90]);
+            lines.forEach((t, li) => {
+              if (isCorrect && li === 0) drawCheckmark(c, qX - 4.5, y - 1.4, c.accent);
+              doc.text(t, qX + 2, y);
+              y += lh(10);
+            });
+          });
+        } else if (withAnswers) {
           y += 1.5;
           setF(c, "bolditalic", 10, c.accent);
           aLines.forEach(t => { doc.text(t, qX, y); y += lh(10); });
@@ -374,9 +396,16 @@ const TGP_PDF = (() => {
       const ly = y + row * space + space - 3;
       setF(c, "bold", numPt, c.accent);
       doc.text((q + 1) + ".", x + (compact ? 5.5 : 6.5), ly, { align: "right" });
-      doc.setDrawColor(165, 165, 165);
-      doc.setLineWidth(0.3);
-      doc.line(x + (compact ? 7.5 : 9), ly + 0.8, x + colW, ly + 0.8);
+      const lineX0 = x + (compact ? 7.5 : 9);
+      if (r.format === "tf") {
+        drawChoiceBubbles(c, ["TRUE", "FALSE"], lineX0, ly, x + colW - lineX0, compact);
+      } else if (r.format === "mc") {
+        drawChoiceBubbles(c, ["A", "B", "C", "D"], lineX0, ly, x + colW - lineX0, compact);
+      } else {
+        doc.setDrawColor(165, 165, 165);
+        doc.setLineWidth(0.3);
+        doc.line(lineX0, ly + 0.8, x + colW, ly + 0.8);
+      }
     }
     let usedRows = perCol;
     if (tb) {
@@ -405,6 +434,33 @@ const TGP_PDF = (() => {
       setF(c, "normal", compact ? 7 : 7.5, [150, 150, 150]);
       doc.text(fLine, M, by + boxH - (compact ? 2.5 : 3.5));
     }
+  }
+
+  /* jsPDF's built-in fonts only cover WinAnsi/Latin-1, so a Unicode
+     checkmark character (✓) silently renders as the wrong glyph — draw it
+     as two short vector strokes instead. */
+  function drawCheckmark(c, x, y, color) {
+    const { doc } = c;
+    doc.setDrawColor(color[0], color[1], color[2]);
+    doc.setLineWidth(0.7);
+    doc.line(x, y, x + 1, y + 1.2);
+    doc.line(x + 1, y + 1.2, x + 2.4, y - 1.5);
+  }
+
+  /* Small circle-and-label bubbles for a team to circle, replacing a blank
+     answer line on True/False and Multiple Choice answer sheets. */
+  function drawChoiceBubbles(c, labels, x0, ly, availW, compact) {
+    const { doc } = c;
+    const rad = compact ? 2 : 2.4;
+    const gap = availW / labels.length;
+    doc.setDrawColor(120, 120, 120);
+    doc.setLineWidth(0.35);
+    labels.forEach((lab, i) => {
+      const cx = x0 + gap * i + rad + 1;
+      doc.circle(cx, ly - 1, rad, "S");
+      setF(c, "normal", compact ? 6.5 : 7.5, [90, 90, 90]);
+      doc.text(lab, cx + rad + 1.8, ly - 1 + 1.2);
+    });
   }
 
   function answerSheets(state) {

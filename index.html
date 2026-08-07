@@ -93,6 +93,18 @@
     </section>
 
     <section class="card" data-collapse>
+      <h2 class="card-title">✨ AI Question Generator</h2>
+      <div class="card-body">
+        <div id="ai-status"></div>
+        <label>License Key
+          <input id="ai-key" type="text" placeholder="Paste your license key" maxlength="120" autocomplete="off">
+        </label>
+        <button id="btn-ai-activate" class="btn btn-small btn-accent" style="margin-top:8px">Activate</button>
+        <p class="hint">Optional paid add-on. Generates a themed round of questions from a topic you type — everything else in Trivia Generator Pro stays free and fully local.</p>
+      </div>
+    </section>
+
+    <section class="card" data-collapse>
       <h2 class="card-title">⚙️ Output Options</h2>
       <div class="card-body">
         <div class="row2">
@@ -167,6 +179,7 @@
 <script src="vendor/jspdf.umd.min.js"></script>
 <script src="js/samples.js"></script>
 <script src="js/pdfgen.js"></script>
+<script src="js/ai.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

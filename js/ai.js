@@ -88,22 +88,71 @@
     renderStatus();
   }
 
+  function creditsLeft() {
+    if (lic.cap == null || lic.used == null) return null;
+    return Math.max(0, lic.cap - lic.used);
+  }
+
   function renderStatus() {
     const box = $("#ai-status");
-    if (!box) return;
-    if (!lic.key) {
-      box.innerHTML = '<p class="hint">No license yet — the rest of Trivia Generator Pro works fully without one. '
-        + '<a href="' + CHECKOUT_URL + '" target="_blank" rel="noopener">Get AI generation →</a></p>';
-    } else if (lic.status === "activating") {
-      box.innerHTML = '<p class="hint">Activating…</p>';
-    } else if (lic.active) {
-      const usage = (lic.cap != null)
-        ? "<b>" + (lic.used == null ? 0 : lic.used) + "</b> / " + lic.cap + " tokens used this month"
-        : "Active";
-      box.innerHTML = '<p class="ai-active">✓ AI generator active — ' + usage + '</p>';
-    } else {
-      box.innerHTML = '<p class="ai-error">' + esc(lic.error || "License not active.") + '</p>';
+    if (box) {
+      if (!lic.key) {
+        box.innerHTML = '<p class="hint">No license yet — the rest of Trivia Generator Pro works fully without one. '
+          + '<a href="' + CHECKOUT_URL + '" target="_blank" rel="noopener">Get AI credits →</a></p>';
+      } else if (lic.status === "activating") {
+        box.innerHTML = '<p class="hint">Activating…</p>';
+      } else if (lic.active) {
+        const left = creditsLeft();
+        const usage = (left != null)
+          ? "<b>" + left + "</b> credit" + (left === 1 ? "" : "s") + " left this month"
+          : "Active";
+        box.innerHTML = '<p class="ai-active">✓ AI Studio active — ' + usage + '</p>';
+      } else {
+        box.innerHTML = '<p class="ai-error">' + esc(lic.error || "License not active.") + '</p>';
+      }
     }
+    updateCreditChip();
+  }
+
+  // The always-visible top-bar balance. Owns none of the license logic —
+  // just reflects `lic` so the credit balance is obvious everywhere.
+  function updateCreditChip() {
+    const chip = document.getElementById("credit-chip");
+    if (!chip) return;
+    const amt = document.getElementById("credit-amount");
+    const sub = document.getElementById("credit-sub");
+    chip.classList.remove("is-loading", "is-cta", "is-low", "is-active");
+    if (!lic.key || !lic.active) {
+      chip.classList.add("is-cta");
+      amt.textContent = "Get AI Credits";
+      sub.textContent = "power up your night";
+      chip.onclick = () => window.open(CHECKOUT_URL, "_blank", "noopener");
+      return;
+    }
+    chip.classList.add("is-active");
+    const left = creditsLeft();
+    if (left == null) {
+      amt.textContent = "AI Ready";
+      sub.textContent = "credits active";
+    } else {
+      amt.textContent = left + (left === 1 ? " credit" : " credits");
+      sub.textContent = "left this month";
+      if (left <= 3) chip.classList.add("is-low");
+    }
+    chip.onclick = null;
+  }
+
+  // A little dopamine when credits are spent: the gem pops and the cost
+  // floats off the chip, so hitting an AI button feels rewarding.
+  function animateSpend(delta) {
+    const chip = document.getElementById("credit-chip");
+    if (!chip || !(delta > 0)) return;
+    chip.classList.add("spent");
+    const fly = document.createElement("span");
+    fly.className = "credit-fly";
+    fly.textContent = "-" + delta;
+    chip.appendChild(fly);
+    setTimeout(() => { chip.classList.remove("spent"); fly.remove(); }, 950);
   }
 
   const esc = s => String(s == null ? "" : s)
@@ -124,20 +173,27 @@
   }
 
   function applyUsage(data) {
+    const before = lic.used;
     if (data.used != null) lic.used = data.used;
     if (data.cap != null) lic.cap = data.cap;
     renderStatus();
+    if (before != null && lic.used != null && lic.used > before) {
+      animateSpend(lic.used - before);
+    }
   }
 
   // Returns a Promise<[{question, answer[, choices]}, ...]>; throws with a
   // user-presentable message on any failure (no license, capped out,
-  // network error, server error). opts: { mode, format, count }
+  // network error, server error). opts: { mode, format, count, age, difficulty }
   async function generateForRound(topic, opts) {
     requireActive();
     opts = opts || {};
     let data;
     try {
-      data = await call("generate", { topic, mode: opts.mode, format: opts.format, count: opts.count || 10 });
+      data = await call("generate", {
+        topic, mode: opts.mode, format: opts.format, count: opts.count || 10,
+        age: opts.age || "", difficulty: opts.difficulty || ""
+      });
     } catch (e) {
       throw new Error("Couldn't reach the AI generator - check your connection and try again.");
     }
@@ -148,12 +204,13 @@
 
   // Returns a Promise<string[]> of 5 category ideas. seed: drill deeper
   // into a specific idea, or "" for a fresh top-level batch. avoid: round
-  // names already in this game, so suggestions stay fresh.
-  async function suggestCategories(seed, avoid) {
+  // names already in this game, so suggestions stay fresh. age: bias
+  // suggestions to a round's audience.
+  async function suggestCategories(seed, avoid, age) {
     requireActive();
     let data;
     try {
-      data = await call("suggest_categories", { seed: seed || "", avoid: avoid || [] });
+      data = await call("suggest_categories", { seed: seed || "", avoid: avoid || [], age: age || "" });
     } catch (e) {
       throw new Error("Couldn't reach the AI generator - check your connection and try again.");
     }

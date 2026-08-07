@@ -11,10 +11,35 @@
     name: name || "",
     type: "standard",
     format: "open", /* "open" | "tf" | "mc" — answer format for this round's questions */
+    ageRange: "family", /* who the round is for — steers samples + AI */
+    difficulty: "balanced", /* AI-only knob; "balanced" adds no prompt instruction */
     points: 10,
     open: true,
     questions: Array.from({ length: n || 10 }, blankQ)
   });
+
+  /* Audience bands. Age range is the friendly primary knob; difficulty is a
+     secondary, AI-only control that defaults to "balanced". */
+  const AGE_RANGES = [
+    ["family", "👪 Family (all ages)"],
+    ["kids",   "🧒 Kids (7–12)"],
+    ["teens",  "🧑 Teens (13–17)"],
+    ["adults", "🍺 Adults (18+)"]
+  ];
+  const DIFFICULTIES = [
+    ["balanced", "🎚 Balanced"],
+    ["easy",     "🟢 Easy"],
+    ["medium",   "🟡 Medium"],
+    ["hard",     "🔴 Hard"]
+  ];
+  const AGE_IDS = AGE_RANGES.map(a => a[0]);
+  const DIFF_IDS = DIFFICULTIES.map(d => d[0]);
+  /* Which sample audience bands a round's age range is allowed to draw from. */
+  const AGE_SAMPLE_BANDS = {
+    family: ["all"], kids: ["all"], teens: ["all", "teen"], adults: ["all", "teen", "adult"]
+  };
+  const sampleAllowed = (entry, ageRange) =>
+    (AGE_SAMPLE_BANDS[ageRange] || AGE_SAMPLE_BANDS.family).includes(entry[2] || "all");
 
   /* Switching a round's answer format migrates existing questions rather
      than wiping them: open->mc keeps whatever was in `a` as choice A. */
@@ -95,6 +120,8 @@
             name: r.name || "",
             type: ["standard", "double", "wager"].includes(r.type) ? r.type : "standard",
             format: ["open", "tf", "mc"].includes(r.format) ? r.format : "open",
+            ageRange: AGE_IDS.includes(r.ageRange) ? r.ageRange : "family",
+            difficulty: DIFF_IDS.includes(r.difficulty) ? r.difficulty : "balanced",
             points: Number(r.points) || 10,
             open: r.open !== false,
             questions: Array.isArray(r.questions) && r.questions.length
@@ -287,6 +314,10 @@
     const cats = Object.keys(TGP_SAMPLES)
       .map(cat => '<option value="' + esc(cat) + '">' + esc(cat) + "</option>").join("");
     const modeOpts = AI_MODES.map(([v, label]) => '<option value="' + v + '">' + label + "</option>").join("");
+    const ageOpts = AGE_RANGES.map(([v, label]) =>
+      '<option value="' + v + '"' + ((r.ageRange || "family") === v ? " selected" : "") + ">" + label + "</option>").join("");
+    const diffOpts = DIFFICULTIES.map(([v, label]) =>
+      '<option value="' + v + '"' + ((r.difficulty || "balanced") === v ? " selected" : "") + ">" + label + "</option>").join("");
     const format = r.format || "open";
     return '<div class="round' + (r.open ? "" : " closed") + '" data-r="' + i + '">' +
       '<div class="round-head">' +
@@ -302,6 +333,7 @@
           '<option value="tf"' + (format === "tf" ? " selected" : "") + ">True / False</option>" +
           '<option value="mc"' + (format === "mc" ? " selected" : "") + ">Multiple Choice</option>" +
         "</select>" +
+        '<select class="r-age" data-field="age" title="Who is this round for? Steers samples and AI.">' + ageOpts + "</select>" +
         '<span class="pts-wrap">pts/q <input type="number" class="r-pts" data-field="points" min="1" max="999" value="' + esc(r.points) + '"></span>' +
         '<div class="round-tools">' +
           '<button class="btn btn-icon" data-act="shuffle" title="Shuffle question order">🔀</button>' +
@@ -321,10 +353,12 @@
           '<button class="btn btn-small" data-act="fill" title="Append 10 ready-made questions">+ 10 Samples</button>' +
         "</div>" +
         '<div class="round-foot round-foot-ai">' +
+          '<span class="ai-label">✨ AI</span>' +
           '<select class="ai-mode" title="Content style">' + modeOpts + "</select>" +
-          '<button class="btn btn-small btn-ai" data-act="ai-fill" title="Generate 10 AI questions for this round">✨ AI Generate 10</button>' +
+          '<select class="ai-diff" data-field="difficulty" title="Difficulty (AI only)">' + diffOpts + "</select>" +
+          '<button class="btn btn-small btn-ai" data-act="ai-fill" title="Generate 10 AI questions for this round">✨ Generate 10 <span class="ai-cost">· 2</span></button>' +
           '<span class="spacer"></span>' +
-          '<button class="btn btn-small btn-ai" data-act="ai-suggest" title="Spin up 5 AI category ideas">🎰 Spin Categories</button>' +
+          '<button class="btn btn-small btn-ai" data-act="ai-suggest" title="Dig up 5 surprising AI category ideas">⛏ Dig for Categories <span class="ai-cost">· 1</span></button>' +
         "</div>" +
         '<div class="ai-suggest-tray" hidden></div>' +
       "</div></div>";
@@ -333,7 +367,14 @@
   function renderRounds() {
     const box = $("#rounds");
     if (!state.rounds.length) {
-      box.innerHTML = '<div class="empty-state"><p>No rounds yet.</p>' +
+      box.innerHTML = '<div class="empty-state">' +
+        '<p class="empty-big">Your first round is a blank canvas.</p>' +
+        '<p>Fill it three ways:</p>' +
+        '<ul class="empty-ways">' +
+          '<li>⛏ <b>Dig</b> for surprising AI categories</li>' +
+          '<li>✨ <b>Generate</b> a whole round from a topic</li>' +
+          '<li>📚 Drop in <b>vetted samples</b></li>' +
+        '</ul>' +
         '<button class="btn btn-accent" id="empty-add">+ Add Your First Round</button></div>';
       $("#empty-add").addEventListener("click", () => { addRound(); });
     } else {
@@ -376,15 +417,18 @@
   function aiFillRound(r, btn, roundEl) {
     const modeSel = roundEl.querySelector(".ai-mode");
     const mode = modeSel ? modeSel.value : "topic";
+    const diffSel = roundEl.querySelector(".ai-diff");
+    const difficulty = diffSel ? diffSel.value : (r.difficulty || "balanced");
+    const age = r.ageRange || "family";
     const needsTopic = mode === "topic" || mode === "lightning" || mode === "list";
     const topic = r.name.trim();
     if (needsTopic && !topic) { toast("Give this round a category/topic first, then generate."); return; }
     if (!window.TGP_AI) { toast("AI generator didn't load — try refreshing."); return; }
     const format = r.format || "open";
     btn.disabled = true;
-    const original = btn.textContent;
+    const original = btn.innerHTML;
     btn.textContent = "Generating…";
-    TGP_AI.generateForRound(topic, { mode, format, count: 10 })
+    TGP_AI.generateForRound(topic, { mode, format, count: 10, age, difficulty })
       .then(questions => {
         const fresh = questions.map(x => {
           const q = String((x && x.question) || "").trim();
@@ -408,7 +452,7 @@
         toast("Added " + fresh.length + " AI-generated questions.");
       })
       .catch(err => toast(err.message || "AI generation failed."))
-      .finally(() => { btn.disabled = false; btn.textContent = original; });
+      .finally(() => { btn.disabled = false; btn.innerHTML = original; });
   }
 
   /* ---------- AI category spinner ---------- */
@@ -418,24 +462,26 @@
     if (!tray) return;
     tray.hidden = false;
     if (spinning) {
-      tray.innerHTML = Array.from({ length: 5 }, (_, i) =>
-        '<span class="chip chip-spin" style="animation-delay:' + (i * 70) + 'ms">?</span>'
-      ).join("");
+      tray.innerHTML = '<span class="dig-hint">⛏ Digging for fresh categories…</span>' +
+        Array.from({ length: 5 }, (_, i) =>
+          '<span class="chip chip-spin chip-gem" style="animation-delay:' + (i * 70) + 'ms">◆</span>'
+        ).join("");
       return;
     }
-    tray.innerHTML = categories.map((cat, i) =>
+    tray.innerHTML = '<span class="dig-hint">💎 Unearthed — click one to use it, or dig deeper:</span>' +
+      categories.map((cat, i) =>
       '<span class="chip chip-landed" style="animation-delay:' + (i * 70) + 'ms" data-cat="' + esc(cat) + '">' +
         '<button type="button" class="chip-text" data-act="usecat">' + esc(cat) + '</button>' +
-        '<button type="button" class="chip-spin-btn" data-act="spincat" title="Spin categories related to this one">🔀</button>' +
+        '<button type="button" class="chip-spin-btn" data-act="spincat" title="Dig deeper into this one">⛏</button>' +
       '</span>'
-    ).join("") + '<button type="button" class="chip-reset" data-act="respin">🔄 Shuffle again</button>';
+    ).join("") + '<button type="button" class="chip-reset" data-act="respin">⛏ Dig again</button>';
   }
 
   function spinCategories(r, roundEl, seed) {
     if (!window.TGP_AI) { toast("AI generator didn't load — try refreshing."); return; }
     renderSuggestTray(roundEl, true);
     const avoid = state.rounds.map(x => x.name.trim()).filter(Boolean);
-    TGP_AI.suggestCategories(seed || "", avoid)
+    TGP_AI.suggestCategories(seed || "", avoid, r.ageRange || "family")
       .then(categories => renderSuggestTray(roundEl, false, categories))
       .catch(err => {
         const tray = roundEl.querySelector(".ai-suggest-tray");
@@ -478,6 +524,8 @@
       if (!r) return;
       if (el.dataset.field === "type") { r.type = el.value; updateStats(); save(); }
       else if (el.dataset.field === "format") { setRoundFormat(r, el.value); renderRounds(); save(); }
+      else if (el.dataset.field === "age") { r.ageRange = AGE_IDS.includes(el.value) ? el.value : "family"; save(); }
+      else if (el.dataset.field === "difficulty") { r.difficulty = DIFF_IDS.includes(el.value) ? el.value : "balanced"; save(); }
       else if (el.dataset.act === "mccorrect") {
         const q = r.questions[Number(el.dataset.q)];
         const idx = Number(el.dataset.idx);
@@ -510,11 +558,12 @@
       else if (act === "addq") { r.questions.push(blankQ()); r.open = true; }
       else if (act === "fill") {
         const cat = roundEl.querySelector(".fill-cat").value;
-        const pool = TGP_SAMPLES[cat] || [];
+        const ageRange = r.ageRange || "family";
+        const pool = (TGP_SAMPLES[cat] || []).filter(e => sampleAllowed(e, ageRange));
         const have = new Set(r.questions.map(q => q.q.trim()).filter(Boolean));
         const fresh = shuffled(pool.filter(([q]) => !have.has(q))).slice(0, 10)
           .map(([q, a]) => ({ q, a }));
-        if (!fresh.length) { toast("No more unused " + cat + " samples for this round."); return; }
+        if (!fresh.length) { toast("No more unused " + cat + " samples for this age range — try a wider Age Range or another category."); return; }
         /* fill empty rows first, then append */
         let fi = 0;
         r.questions.forEach(q => {
@@ -643,7 +692,8 @@
     state.game.subtitle = "Live Pub Trivia";
     state.game.date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
     state.rounds = picks.map(cat => ({
-      name: cat, type: "standard", points: 10, open: true,
+      name: cat, type: "standard", format: "open", ageRange: "teens", difficulty: "balanced",
+      points: 10, open: true,
       questions: shuffled(TGP_SAMPLES[cat]).slice(0, 10).map(([q, a]) => ({ q, a }))
     }));
     state.rounds[2].type = "double";

@@ -166,8 +166,10 @@ export default {
           return new Response(JSON.stringify({ ok: false, error: 'This mode needs a topic.' }), { headers });
         }
         const count = Math.min(Math.max(parseInt(body.count, 10) || 10, 1), MAX_QUESTIONS_PER_CALL);
+        const age = ['family', 'kids', 'teens', 'adults'].includes(body.age) ? body.age : '';
+        const difficulty = ['easy', 'medium', 'hard'].includes(body.difficulty) ? body.difficulty : '';
 
-        const questions = await generateQuestions(env.ANTHROPIC_API_KEY, { topic, mode, format, count });
+        const questions = await generateQuestions(env.ANTHROPIC_API_KEY, { topic, mode, format, count, age, difficulty });
 
         const newUsed = await commitUsage(env, gate.key, gate.used, GENERATE_COST);
         return new Response(JSON.stringify({ ok: true, questions, used: newUsed, cap: gate.cap }), { headers });
@@ -190,8 +192,9 @@ export default {
 
         const seed = String(body.seed || '').slice(0, 200);
         const avoid = Array.isArray(body.avoid) ? body.avoid.slice(0, 20).map(x => String(x).slice(0, 80)).filter(Boolean) : [];
+        const age = ['family', 'kids', 'teens', 'adults'].includes(body.age) ? body.age : '';
 
-        const categories = await suggestCategoryNames(env.ANTHROPIC_API_KEY, { seed, avoid });
+        const categories = await suggestCategoryNames(env.ANTHROPIC_API_KEY, { seed, avoid, age });
 
         const newUsed = await commitUsage(env, gate.key, gate.used, SUGGEST_COST);
         return new Response(JSON.stringify({ ok: true, categories, used: newUsed, cap: gate.cap }), { headers });
@@ -318,7 +321,22 @@ const MODE_INSTRUCTIONS = {
     ' - each question gives 3-4 short clues/items and asks what links them, and the answer states the connection.',
 };
 
-async function generateQuestions(apiKey, { topic, mode, format, count }) {
+// Audience + difficulty instructions appended to the generation prompt.
+// Age range always adds an appropriateness/reading-level line; difficulty
+// only speaks up when it isn't the default "balanced".
+const AGE_INSTRUCTIONS = {
+  family: ' Keep every question and its subject matter family-friendly and suitable for all ages, including young children - nothing crude, violent, or adult.',
+  kids:   ' Aim at children roughly ages 7-12: simple wording and well-known, kid-friendly subjects; nothing crude or adult.',
+  teens:  ' Aim at teenagers (about 13-17): age-appropriate with no explicit or adult content; some current pop-culture is welcome.',
+  adults: ' Aimed at an adult pub audience (18+); wide-ranging references are fine, but avoid explicit or offensive content.',
+};
+const DIFFICULTY_INSTRUCTIONS = {
+  easy:   ' Keep them easy - most casual players should know the answers.',
+  medium: ' Aim for moderate difficulty.',
+  hard:   ' Make them genuinely challenging, for seasoned trivia players.',
+};
+
+async function generateQuestions(apiKey, { topic, mode, format, count, age, difficulty }) {
   const schemaProps = {
     question: { type: 'string' },
     answer: { type: 'string' },
@@ -351,6 +369,8 @@ async function generateQuestions(apiKey, { topic, mode, format, count }) {
   const prompt = 'Write ' + count + ' original pub-trivia questions with concise, unambiguous answers.\n' +
     (MODE_INSTRUCTIONS[mode] || MODE_INSTRUCTIONS.topic)(topic, count) +
     formatInstructions +
+    (AGE_INSTRUCTIONS[age] || '') +
+    (DIFFICULTY_INSTRUCTIONS[difficulty] || '') +
     '\nQuestions must be factually correct and suitable for reading aloud at a live trivia night.';
 
   const out = await callAnthropic(apiKey, { prompt, tool, maxTokens: 1536 });
@@ -367,7 +387,14 @@ async function generateQuestions(apiKey, { topic, mode, format, count }) {
   return questions;
 }
 
-async function suggestCategoryNames(apiKey, { seed, avoid }) {
+const AGE_HINT = {
+  family: ' Keep them family-friendly and suitable for all ages.',
+  kids:   ' Aim them at kids roughly 7-12.',
+  teens:  ' Aim them at teens roughly 13-17.',
+  adults: ' Aim them at an adult pub crowd (18+), but nothing explicit or offensive.',
+};
+
+async function suggestCategoryNames(apiKey, { seed, avoid, age }) {
   const tool = {
     name: 'return_categories',
     description: 'Return short, punchy trivia round category name ideas.',
@@ -384,6 +411,7 @@ async function suggestCategoryNames(apiKey, { seed, avoid }) {
     ? 'Suggest 5 fresh, more specific/niche pub-trivia round category ideas that drill deeper into or riff on this one: "' + seed + '". Go more specific and surprising, not broader.'
     : 'Suggest 5 fun, surprising pub-trivia round category ideas - a mix of well-known and delightfully unexpected angles.'
   ) + ' Short, punchy names (2-6 words each), no explanations.' +
+    (AGE_HINT[age] || '') +
     (avoid.length ? ('\nAvoid repeating (already used in this game): ' + avoid.join(', ') + '.') : '');
 
   const out = await callAnthropic(apiKey, { prompt, tool, maxTokens: 300 });

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trivia Generator Pro — Build &amp; Print Custom Trivia Games</title>
-<meta name="description" content="Build fully branded pub-trivia games in minutes and download print-ready PDFs — host packets, question sheets, answer sheets, and score sheets. No wifi, laptop, or app needed once you hit print.">
+<meta name="description" content="Build fully branded pub-trivia games in minutes and download print-ready PDFs — host packets, question sheets, answer sheets, and score sheets. Dig up categories you'd never think of with AI, then print and host anywhere.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f0b429'/%3E%3Ctext x='32' y='44' font-size='36' font-family='Georgia' font-weight='bold' text-anchor='middle' fill='%23151c30'%3E%3F%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -18,13 +18,23 @@
     </svg>
     <div>
       <h1>Trivia Generator Pro</h1>
-      <p class="tagline">Build it. Brand it. Print it. Host it.</p>
+      <p class="tagline">Build a trivia night worth showing up for.</p>
     </div>
   </div>
+
+  <!-- Credits balance — always visible. Rendered by ai.js; this is the fallback. -->
+  <button id="credit-chip" class="credit-chip is-loading" title="AI credits — spend them to dig up categories and generate questions">
+    <span class="credit-gem" aria-hidden="true">◆</span>
+    <span class="credit-body">
+      <span class="credit-amount" id="credit-amount">AI Credits</span>
+      <span class="credit-sub" id="credit-sub">tap to power up</span>
+    </span>
+  </button>
+
   <div class="topbar-actions">
-    <button id="btn-sample" class="btn btn-ghost" title="Load a ready-to-play 3-round demo game">⚡ Load Sample Game</button>
-    <button id="btn-export" class="btn btn-ghost" title="Save this game as a file you can reload later">💾 Save Game File</button>
-    <button id="btn-import" class="btn btn-ghost" title="Load a previously saved game file">📂 Open Game File</button>
+    <button id="btn-sample" class="btn btn-ghost" title="Load a ready-to-play 3-round demo game">⚡ See a Finished Night</button>
+    <button id="btn-export" class="btn btn-ghost" title="Save this game as a file you can reload later">💾 Save</button>
+    <button id="btn-import" class="btn btn-ghost" title="Load a previously saved game file">📂 Open</button>
     <input type="file" id="import-file" accept=".json,.tgp" hidden>
     <button id="btn-reset" class="btn btn-ghost btn-danger" title="Clear everything and start over">🗑 Reset</button>
   </div>
@@ -36,7 +46,7 @@
   <aside class="settings">
 
     <section class="card" data-collapse>
-      <h2 class="card-title">🎲 Game Details</h2>
+      <h2 class="card-title"><span class="step-badge">1</span>🎲 Game Details</h2>
       <div class="card-body">
         <label>Game Title
           <input id="g-title" type="text" placeholder="Thursday Night Trivia" maxlength="60">
@@ -55,8 +65,25 @@
       </div>
     </section>
 
-    <section class="card" data-collapse>
-      <h2 class="card-title">🏷 Branding</h2>
+    <section class="card card-ai" data-collapse>
+      <h2 class="card-title">✨ AI Studio <span class="pill-new">the fun part</span></h2>
+      <div class="card-body">
+        <p class="ai-pitch">Out of ideas? <b>Dig for categories</b> you'd never think of, then <b>generate</b> a
+          whole round in one click. Every dig and generate spends a few <b>credits</b>.</p>
+        <div id="ai-status"></div>
+        <details class="ai-key-details">
+          <summary>Have a license key?</summary>
+          <label>License Key
+            <input id="ai-key" type="text" placeholder="Paste your license key" maxlength="120" autocomplete="off">
+          </label>
+          <button id="btn-ai-activate" class="btn btn-small btn-accent" style="margin-top:8px">Activate</button>
+          <p class="hint">Optional paid add-on. Everything else in Trivia Generator Pro stays free and fully local.</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="card closed" data-collapse>
+      <h2 class="card-title"><span class="step-badge">3</span>🏷 Branding <span class="hint">(optional)</span></h2>
       <div class="card-body">
         <label>Logo <span class="hint">(PNG or JPG, shows on every page)</span></label>
         <div class="logo-zone">
@@ -92,19 +119,7 @@
       </div>
     </section>
 
-    <section class="card" data-collapse>
-      <h2 class="card-title">✨ AI Question Generator</h2>
-      <div class="card-body">
-        <div id="ai-status"></div>
-        <label>License Key
-          <input id="ai-key" type="text" placeholder="Paste your license key" maxlength="120" autocomplete="off">
-        </label>
-        <button id="btn-ai-activate" class="btn btn-small btn-accent" style="margin-top:8px">Activate</button>
-        <p class="hint">Optional paid add-on. Generates a themed round of questions from a topic you type — everything else in Trivia Generator Pro stays free and fully local.</p>
-      </div>
-    </section>
-
-    <section class="card" data-collapse>
+    <section class="card closed" data-collapse>
       <h2 class="card-title">⚙️ Output Options</h2>
       <div class="card-body">
         <div class="row2">
@@ -133,7 +148,7 @@
     </section>
 
     <section class="card downloads">
-      <h2 class="card-title">📄 Your PDFs</h2>
+      <h2 class="card-title"><span class="step-badge">4</span>📄 Print Your Kit</h2>
       <div class="card-body">
         <div class="dl-row">
           <div class="dl-info"><strong>Host Packet</strong><span>Cover page + every question <em>with answers</em></span></div>
@@ -160,11 +175,17 @@
 
   <!-- ============ RIGHT: ROUNDS BUILDER ============ -->
   <section class="builder">
-    <div class="builder-head">
-      <h2>Rounds &amp; Questions</h2>
-      <div id="stats" class="stats"></div>
+    <div class="builder-hero">
+      <div class="builder-hero-text">
+        <span class="step-badge step-badge-lg">2</span>
+        <div>
+          <h2>Build Your Rounds</h2>
+          <p>Type your own, drop in vetted samples, or let AI <b>dig up categories you'd never think of</b> and fill them in seconds.</p>
+        </div>
+      </div>
       <button id="btn-add-round" class="btn btn-accent">+ Add Round</button>
     </div>
+    <div id="stats" class="stats"></div>
     <div id="rounds"></div>
   </section>
 

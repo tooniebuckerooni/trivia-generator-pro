@@ -21,9 +21,11 @@ Every game exports as a matched, branded set of PDFs:
 
 - **Rounds & questions** — unlimited rounds, per-round categories and point values, reorder/shuffle/duplicate, collapse rounds while you work
 - **Round types** — Standard, Double Points, and Wager rounds (answer sheets get a wager line automatically)
+- **Answer formats** — Open-ended, True/False, or Multiple Choice per round
+- **Age Range** — set who each round is for (Family / Kids / Teens / Adults); it steers which samples fill and how the AI writes. An optional per-round Difficulty (Balanced / Easy / Medium / Hard) fine-tunes AI generation
 - **Tiebreaker** — closest-answer-wins question, printed in the packets and on the final answer sheet
 - **Branding** — upload your logo, set your business name, tagline, website, accent color, and PDF font; everything appears on every page
-- **Sample question packs** — 8 categories of ready-made questions; fill any round with one click, or load a complete 3-round sample game to see how it all works
+- **Sample question packs** — 10 categories of ready-made questions (age-tagged); fill any round with one click, or load a complete 3-round sample game to see how it all works
 - **Paper-saver mode** — print answer sheets two-per-page with a cut line
 - **US Letter or A4**, instant PDF preview before downloading
 - **Autosave** — your game is saved in your browser as you type; you can also save/load game files (`.tgp.json`) to keep a library of games
@@ -32,13 +34,20 @@ Every game exports as a matched, branded set of PDFs:
 
 This tool is for the work that happens *before* trivia night: writing questions, branding the packet, hitting print. Once the PDFs are downloaded, running the show is deliberately low-tech — paper, a pen, and a host. That's the point, not a gap: no wifi dependency, nothing for teams to install, nothing to troubleshoot mid-show. Features that would require a screen or connection during the event itself — live scoreboards, a presenter/display mode, QR-code check-ins — are intentionally out of scope.
 
-## AI Question Generator (optional paid add-on)
+## AI Studio (optional paid add-on)
 
 Everything above is free, unlimited, and stays in your browser. On top of
-it, there's an optional add-on: type a topic and get back a themed round
-of AI-generated questions, gated by a LemonSqueezy license and metered per
-month. It's entirely separate from the core app — the free product doesn't
-change, require a license, or need this add-on to function.
+it, there's an optional add-on that runs on **credits**:
+
+- **Dig for Categories** (1 credit) — unearth five surprising, ready-to-use
+  round categories you'd never think of, then dig deeper into any of them.
+- **Generate 10** (2 credits) — fill a whole round from a topic, matching the
+  round's answer format, age range, and difficulty.
+
+Your credit balance lives in the top bar and ticks down as you spend it.
+Credits are gated by a LemonSqueezy license and metered per month. The add-on
+is entirely separate from the core app — the free product doesn't change,
+require a license, or need it to function.
 
 Setup for anyone deploying this themselves: the add-on needs a small
 Cloudflare Worker (`worker.js` at the repo root — deploy instructions are

@@ -213,6 +213,71 @@ textarea { resize: vertical; min-height: 38px; }
 .round-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .round-foot select { width: auto; margin: 0; padding: 6px 8px; font-size: 13px; }
 .round-foot .spacer { flex: 1; }
+.round-foot-ai { margin-top: 6px; }
+.round-head select.r-format { width: auto; margin: 0; }
+
+/* True/False rows: same grid as .q-row, answer column becomes a toggle */
+.q-row-tf { grid-template-columns: 26px minmax(0, 1.5fr) auto 56px; }
+.tf-toggle { display: flex; gap: 6px; padding-top: 2px; }
+.tf-btn {
+  border: 1px solid var(--card-edge); background: #121a31; color: var(--ink-dim);
+  border-radius: 6px; padding: 7px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.tf-btn.active { background: var(--accent); border-color: #41549a; color: #fff; }
+
+/* Multiple-choice rows: question stacked above 4 choice inputs */
+.q-row-mc { grid-template-columns: 26px minmax(0, 1fr) 56px; }
+.q-row-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.q-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.q-choice { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; }
+.q-choice input[type="text"] { margin: 0; padding: 6px 8px; font-size: 12.5px; }
+.q-choice input[type="radio"] { flex: none; accent-color: var(--gold); width: 15px; height: 15px; }
+
+/* AI category spinner */
+.ai-suggest-tray {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--card-edge);
+}
+.ai-suggest-tray[hidden] { display: none; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: 20px; font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--card-edge); background: #232e52;
+}
+.chip-text {
+  border: none; background: transparent; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.chip-text:hover { text-decoration: underline; }
+.chip-spin-btn {
+  border: none; background: transparent; cursor: pointer; padding: 0; font-size: 12px;
+  color: var(--ink-dim); line-height: 1;
+}
+.chip-spin-btn:hover { color: var(--ink); }
+.chip-reset {
+  border: none; background: transparent; color: var(--ink-dim); cursor: pointer;
+  font-size: 12.5px; font-weight: 600; padding: 6px 4px;
+}
+.chip-reset:hover { color: var(--ink); }
+
+@keyframes chip-shimmer {
+  0%, 100% { opacity: .35; transform: translateY(0); }
+  50% { opacity: .85; transform: translateY(-2px); }
+}
+.chip-spin {
+  color: var(--ink-dim); border-style: dashed;
+  animation: chip-shimmer .6s ease-in-out infinite;
+}
+
+@keyframes chip-land {
+  0% { transform: scale(.7); opacity: 0; }
+  70% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.chip-landed {
+  animation: chip-land .3s ease-out backwards;
+  border-color: var(--gold-dark);
+}
 
 .empty-state {
   text-align: center; padding: 50px 20px; color: var(--ink-dim);

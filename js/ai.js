@@ -98,7 +98,7 @@
       box.innerHTML = '<p class="hint">Activating…</p>';
     } else if (lic.active) {
       const usage = (lic.cap != null)
-        ? "<b>" + (lic.used == null ? 0 : lic.used) + "</b> / " + lic.cap + " generations used this month"
+        ? "<b>" + (lic.used == null ? 0 : lic.used) + "</b> / " + lic.cap + " tokens used this month"
         : "Active";
       box.innerHTML = '<p class="ai-active">✓ AI generator active — ' + usage + '</p>';
     } else {
@@ -117,24 +117,49 @@
     input.addEventListener("keydown", e => { if (e.key === "Enter") activate(input.value); });
   }
 
-  // Returns a Promise<[{question, answer}, ...]>; throws with a
-  // user-presentable message on any failure (no license, capped out,
-  // network error, server error).
-  async function generateForRound(topic, count) {
+  function requireActive() {
     if (!lic.key || !lic.active) {
       throw new Error("Activate an AI license first (see the AI Question Generator panel).");
     }
-    let data;
-    try {
-      data = await call("generate", { topic, count: count || 10 });
-    } catch (e) {
-      throw new Error("Couldn't reach the AI generator - check your connection and try again.");
-    }
+  }
+
+  function applyUsage(data) {
     if (data.used != null) lic.used = data.used;
     if (data.cap != null) lic.cap = data.cap;
     renderStatus();
+  }
+
+  // Returns a Promise<[{question, answer[, choices]}, ...]>; throws with a
+  // user-presentable message on any failure (no license, capped out,
+  // network error, server error). opts: { mode, format, count }
+  async function generateForRound(topic, opts) {
+    requireActive();
+    opts = opts || {};
+    let data;
+    try {
+      data = await call("generate", { topic, mode: opts.mode, format: opts.format, count: opts.count || 10 });
+    } catch (e) {
+      throw new Error("Couldn't reach the AI generator - check your connection and try again.");
+    }
+    applyUsage(data);
     if (!data.ok) throw new Error(data.error || "Generation failed.");
     return data.questions;
+  }
+
+  // Returns a Promise<string[]> of 5 category ideas. seed: drill deeper
+  // into a specific idea, or "" for a fresh top-level batch. avoid: round
+  // names already in this game, so suggestions stay fresh.
+  async function suggestCategories(seed, avoid) {
+    requireActive();
+    let data;
+    try {
+      data = await call("suggest_categories", { seed: seed || "", avoid: avoid || [] });
+    } catch (e) {
+      throw new Error("Couldn't reach the AI generator - check your connection and try again.");
+    }
+    applyUsage(data);
+    if (!data.ok) throw new Error(data.error || "Couldn't get suggestions.");
+    return data.categories;
   }
 
   function init() {
@@ -144,5 +169,5 @@
     if (lic.key) checkStatus();
   }
 
-  window.TGP_AI = { init, generateForRound };
+  window.TGP_AI = { init, generateForRound, suggestCategories };
 })();

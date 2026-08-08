@@ -10,10 +10,11 @@
 // 3. Settings -> Variables and Secrets -> add:
 //      Name: LS_API_KEY          Value: your LemonSqueezy API key
 //      Name: ANTHROPIC_API_KEY   Value: your Anthropic API key
-// 4. In LemonSqueezy: create a "Trivia Show Maker — AI Credits" product with
-//    License Keys ENABLED, as a ONE-TIME purchase (not a subscription). Add a
-//    variant per pack size (start with a 50-credit pack) and copy each
-//    variant's ID into TIER_CAPS below.
+// 4. In LemonSqueezy: create a ONE-TIME product with License Keys ENABLED,
+//    and put the credit count in its NAME, e.g. "Trivia Show Maker - 50 AI
+//    Credits". The Worker reads that number as the pack size — no variant ID
+//    to configure. New pack sizes are just new products named "... 200 AI
+//    Credits", etc. (TIER_CAPS below is an optional override.)
 // 5. Add your production origin(s) to ALLOWED_ORIGINS below.
 // 6. Deploy.
 //
@@ -44,13 +45,14 @@ const ALLOWED_ORIGINS = [
   'https://tooniebuckerooni.github.io', // GitHub Pages demo copy
 ];
 
-// LemonSqueezy variant_id -> credits granted by that one-time pack.
-// Fill in each variant's ID after creating the product in LemonSqueezy.
+// Credits per pack are normally read straight from the LemonSqueezy product
+// name — a product called "... 50 AI Credits" grants 50 — so you don't need
+// to configure anything here, and new pack sizes need no code change (just
+// name them "... 200 AI Credits", etc.). TIER_CAPS is an OPTIONAL override:
+// map a numeric variant_id to a credit count to force a specific amount
+// regardless of the name. Leave it empty to rely on the product name.
 const TIER_CAPS = {
-  'REPLACE_WITH_50_PACK_VARIANT_ID': 50,
-  // Add the medium/large packs here once they launch, e.g.:
-  // 'REPLACE_WITH_200_PACK_VARIANT_ID': 200,
-  // 'REPLACE_WITH_500_PACK_VARIANT_ID': 500,
+  // '123456': 50,
 };
 
 const MODEL = 'claude-haiku-4-5-20251001';
@@ -67,6 +69,25 @@ function getAllowedOrigin(request) {
 // credits accumulate for the life of the pack and never reset.
 function balanceKey(licenseKey) {
   return 'credits:' + licenseKey;
+}
+
+// How many credits a license grants. Prefer an explicit TIER_CAPS entry
+// (keyed by numeric variant_id); otherwise read the first number out of the
+// LemonSqueezy variant/product name (e.g. "200 AI Credits" -> 200). Both
+// fields are set by the store owner and returned by LemonSqueezy, so a buyer
+// can't forge them. Returns null if no credit amount can be determined
+// (the caller then fails closed).
+function creditsForLicense(meta) {
+  if (!meta) return null;
+  const variantId = String(meta.variant_id ?? '');
+  if (TIER_CAPS[variantId]) return TIER_CAPS[variantId];
+  const name = String(meta.variant_name || meta.product_name || '');
+  const m = name.match(/\d[\d,]*/);
+  if (m) {
+    const n = parseInt(m[0].replace(/,/g, ''), 10);
+    if (n > 0) return n;
+  }
+  return null;
 }
 
 // Shared fail-closed gate for both metered actions: confirms the license
@@ -88,8 +109,7 @@ async function checkLicenseAndReserve(env, license_key, instance_id, cost) {
   const isActive = lsData.valid === true && lsData.license_key?.status === 'active';
   if (!isActive) return { ok: false, error: 'License not active.' };
 
-  const variantId = String(lsData.meta?.variant_id ?? '');
-  const cap = TIER_CAPS[variantId];
+  const cap = creditsForLicense(lsData.meta);
   if (!cap) return { ok: false, error: "This license key isn't a valid AI credit pack." };
 
   if (!env.USAGE_KV) return { ok: false, error: 'Credit tracking is not configured on the server.' };
@@ -256,9 +276,9 @@ export default {
       const isActive = data.valid === true && data.license_key?.status === 'active';
 
       let used = null, cap = null;
-      const variantId = String(data.meta?.variant_id ?? '');
-      if (isActive && TIER_CAPS[variantId] && env.USAGE_KV) {
-        cap = TIER_CAPS[variantId];
+      const packCap = isActive ? creditsForLicense(data.meta) : null;
+      if (packCap && env.USAGE_KV) {
+        cap = packCap;
         used = parseInt((await env.USAGE_KV.get(balanceKey(license_key))) || '0', 10);
       }
 

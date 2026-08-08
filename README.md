@@ -45,15 +45,17 @@ it, there's an optional add-on that runs on **credits**:
   round's answer format, age range, and difficulty.
 
 Your credit balance lives in the top bar and ticks down as you spend it.
-Credits are gated by a LemonSqueezy license and metered per month. The add-on
-is entirely separate from the core app — the free product doesn't change,
-require a license, or need it to function.
+Credits come from **one-time packs** (bought via a LemonSqueezy license) and
+never expire — top up by buying another pack. The add-on is entirely separate
+from the core app — the free product doesn't change, require a license, or
+need it to function.
 
 Setup for anyone deploying this themselves: the add-on needs a small
 Cloudflare Worker (`worker.js` at the repo root — deploy instructions are
-in its header comment) plus a LemonSqueezy product with subscription
-variants. Without a Worker deployed, the "AI Question Generator" panel in
-the app just stays inactive — no errors, no effect on the free features.
+in its header comment) plus a LemonSqueezy product with **License Keys enabled
+as a one-time purchase**, one variant per pack size. Without a Worker deployed,
+the AI Studio panel in the app just stays inactive — no errors, no effect on
+the free features.
 
 ## Running it yourself
 

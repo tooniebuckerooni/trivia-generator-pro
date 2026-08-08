@@ -10,18 +10,20 @@
 // 3. Settings -> Variables and Secrets -> add:
 //      Name: LS_API_KEY          Value: your LemonSqueezy API key
 //      Name: ANTHROPIC_API_KEY   Value: your Anthropic API key
-// 4. In LemonSqueezy: create ONE product ("AI Question Generator") with
-//    two subscription variants (e.g. Host / Pro Host). Copy each
+// 4. In LemonSqueezy: create a "Trivia Show Maker — AI Credits" product with
+//    License Keys ENABLED, as a ONE-TIME purchase (not a subscription). Add a
+//    variant per pack size (start with a 50-credit pack) and copy each
 //    variant's ID into TIER_CAPS below.
 // 5. Add your production origin(s) to ALLOWED_ORIGINS below.
 // 6. Deploy.
 //
-// Token economy: every AI action spends "tokens" (the product's usage
-// unit, unrelated to LLM/API tokens) from the license's monthly pool.
-//   - suggest_categories: 1 token for a batch of 5 category ideas.
-//   - generate: 2 tokens for a batch of up to 10 Q&A pairs.
-// Both draw from the same TIER_CAPS pool, so a host can spend it however
-// they like — browse ideas cheaply, spend more to commit to a round.
+// Credit economy: every AI action spends "credits" (the product's usage
+// unit, unrelated to LLM/API tokens) from the license's credit balance.
+//   - suggest_categories: 1 credit for a batch of 5 category ideas.
+//   - generate: 2 credits for a batch of up to 10 Q&A pairs.
+// Credits come from a one-time pack (size set by TIER_CAPS) and PERSIST until
+// spent — they never reset. Buying another pack issues a new license key with
+// its own fresh balance, so a host tops up by activating the new key.
 //
 // Design notes (mirrors the licensing pattern proven in the bingo card
 // generator's worker.js, adapted for metered usage instead of export
@@ -37,20 +39,22 @@
 // ================================================================
 
 const ALLOWED_ORIGINS = [
-  'https://tooniebuckerooni.github.io', // GitHub Pages
-  // add a custom domain here once one exists, e.g. 'https://triviageneratorpro.com'
+  'https://www.fatcityentertainment.com', // primary home — Trivia Show Maker
+  'https://fatcityentertainment.com',
+  'https://tooniebuckerooni.github.io', // GitHub Pages demo copy
 ];
 
-// LemonSqueezy variant_id -> monthly token pool.
-// Fill in after creating the product/variants in the LemonSqueezy dashboard.
+// LemonSqueezy variant_id -> credits granted by that one-time pack.
+// Fill in each variant's ID after creating the product in LemonSqueezy.
 const TIER_CAPS = {
-  'REPLACE_WITH_TIER1_VARIANT_ID': 100,
-  'REPLACE_WITH_TIER2_VARIANT_ID': 300,
+  'REPLACE_WITH_50_PACK_VARIANT_ID': 50,
+  // Add the medium/large packs here once they launch, e.g.:
+  // 'REPLACE_WITH_200_PACK_VARIANT_ID': 200,
+  // 'REPLACE_WITH_500_PACK_VARIANT_ID': 500,
 };
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_QUESTIONS_PER_CALL = 10;
-const USAGE_KEY_TTL_SECONDS = 60 * 60 * 24 * 40; // 40 days - outlives the billing month, next month just uses a new key
 const GENERATE_COST = 2;
 const SUGGEST_COST = 1;
 
@@ -59,15 +63,15 @@ function getAllowedOrigin(request) {
   return ALLOWED_ORIGINS.find(o => origin.startsWith(o)) || ALLOWED_ORIGINS[0];
 }
 
-function periodKey(licenseKey) {
-  const now = new Date();
-  const ym = now.getUTCFullYear() + '-' + String(now.getUTCMonth() + 1).padStart(2, '0');
-  return 'usage:' + licenseKey + ':' + ym;
+// One persistent balance per license key (per pack). No date component, so
+// credits accumulate for the life of the pack and never reset.
+function balanceKey(licenseKey) {
+  return 'credits:' + licenseKey;
 }
 
 // Shared fail-closed gate for both metered actions: confirms the license
-// is active with LemonSqueezy, resolves its token pool from TIER_CAPS, and
-// checks there's enough left this period. Does NOT spend the tokens - call
+// is active with LemonSqueezy, resolves its credit pack size from TIER_CAPS,
+// and checks there's enough left. Does NOT spend the credits - call
 // commitUsage() only after the AI call actually succeeds, so a failed
 // generation never costs the host anything.
 async function checkLicenseAndReserve(env, license_key, instance_id, cost) {
@@ -86,16 +90,16 @@ async function checkLicenseAndReserve(env, license_key, instance_id, cost) {
 
   const variantId = String(lsData.meta?.variant_id ?? '');
   const cap = TIER_CAPS[variantId];
-  if (!cap) return { ok: false, error: "This license's plan does not include AI generation." };
+  if (!cap) return { ok: false, error: "This license key isn't a valid AI credit pack." };
 
-  if (!env.USAGE_KV) return { ok: false, error: 'Usage tracking is not configured on the server.' };
+  if (!env.USAGE_KV) return { ok: false, error: 'Credit tracking is not configured on the server.' };
 
-  const key = periodKey(license_key);
+  const key = balanceKey(license_key);
   const used = parseInt((await env.USAGE_KV.get(key)) || '0', 10);
   if (used + cost > cap) {
     return {
       ok: false,
-      error: 'Not enough tokens left this month (' + Math.max(cap - used, 0) + ' of ' + cap + ' remaining). Resets next month.',
+      error: 'Out of credits (' + Math.max(cap - used, 0) + ' of ' + cap + ' left). Buy another credit pack to keep generating.',
       used, cap,
     };
   }
@@ -104,7 +108,8 @@ async function checkLicenseAndReserve(env, license_key, instance_id, cost) {
 
 async function commitUsage(env, key, used, cost) {
   const newUsed = used + cost;
-  await env.USAGE_KV.put(key, String(newUsed), { expirationTtl: USAGE_KEY_TTL_SECONDS });
+  // No TTL — a pack's credits persist until spent.
+  await env.USAGE_KV.put(key, String(newUsed));
   return newUsed;
 }
 
@@ -254,7 +259,7 @@ export default {
       const variantId = String(data.meta?.variant_id ?? '');
       if (isActive && TIER_CAPS[variantId] && env.USAGE_KV) {
         cap = TIER_CAPS[variantId];
-        used = parseInt((await env.USAGE_KV.get(periodKey(license_key))) || '0', 10);
+        used = parseInt((await env.USAGE_KV.get(balanceKey(license_key))) || '0', 10);
       }
 
       return new Response(JSON.stringify({

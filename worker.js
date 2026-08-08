@@ -81,13 +81,16 @@ function creditsForLicense(meta) {
   if (!meta) return null;
   const variantId = String(meta.variant_id ?? '');
   if (TIER_CAPS[variantId]) return TIER_CAPS[variantId];
-  const name = String(meta.variant_name || meta.product_name || '');
-  const m = name.match(/\d[\d,]*/);
-  if (m) {
+  // Read the first number out of the product name, then the variant name.
+  // Single-variant products often report variant_name as "Default", so the
+  // product name — which carries the "50 AI Credits" title — is checked first.
+  const firstNum = (s) => {
+    const m = String(s || '').match(/\d[\d,]*/);
+    if (!m) return null;
     const n = parseInt(m[0].replace(/,/g, ''), 10);
-    if (n > 0) return n;
-  }
-  return null;
+    return n > 0 ? n : null;
+  };
+  return firstNum(meta.product_name) ?? firstNum(meta.variant_name);
 }
 
 // Shared fail-closed gate for both metered actions: confirms the license

@@ -358,7 +358,8 @@
           '<select class="ai-diff" data-field="difficulty" title="Difficulty (AI only)">' + diffOpts + "</select>" +
           '<button class="btn btn-small btn-ai" data-act="ai-fill" title="Generate 10 AI questions for this round">✨ Generate 10 <span class="ai-cost">· 2</span></button>' +
           '<span class="spacer"></span>' +
-          '<button class="btn btn-small btn-ai" data-act="ai-suggest" title="Dig up 5 surprising AI category ideas">⛏ Dig for Categories <span class="ai-cost">· 1</span></button>' +
+          '<input type="text" class="ai-theme" placeholder="Theme (e.g. Halloween)" title="Optional theme to steer the dig" maxlength="60">' +
+          '<button class="btn btn-small btn-ai" data-act="ai-suggest" title="Dig up 5 surprising AI category ideas, themed if you typed one">⛏ Dig for Categories <span class="ai-cost">· 1</span></button>' +
         "</div>" +
         '<div class="ai-suggest-tray" hidden></div>' +
       "</div></div>";
@@ -477,11 +478,11 @@
     ).join("") + '<button type="button" class="chip-reset" data-act="respin">⛏ Dig again</button>';
   }
 
-  function spinCategories(r, roundEl, seed) {
+  function spinCategories(r, roundEl, seed, theme) {
     if (!window.TGP_AI) { toast("AI generator didn't load — try refreshing."); return; }
     renderSuggestTray(roundEl, true);
     const avoid = state.rounds.map(x => x.name.trim()).filter(Boolean);
-    TGP_AI.suggestCategories(seed || "", avoid, r.ageRange || "family")
+    TGP_AI.suggestCategories(seed || "", avoid, r.ageRange || "family", theme || "")
       .then(categories => renderSuggestTray(roundEl, false, categories))
       .catch(err => {
         const tray = roundEl.querySelector(".ai-suggest-tray");
@@ -581,12 +582,14 @@
         return; /* async — aiFillRound does its own renderRounds()/save() */
       }
       else if (act === "ai-suggest" || act === "respin") {
-        spinCategories(r, roundEl, "");
+        const theme = (roundEl.querySelector(".ai-theme") || {}).value || "";
+        spinCategories(r, roundEl, "", theme);
         return; /* async, and the tray is ephemeral UI — not part of saved state */
       }
       else if (act === "spincat") {
         const seed = btn.closest(".chip").dataset.cat;
-        spinCategories(r, roundEl, seed);
+        const theme = (roundEl.querySelector(".ai-theme") || {}).value || "";
+        spinCategories(r, roundEl, seed, theme);
         return;
       }
       else if (act === "usecat") {

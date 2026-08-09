@@ -219,10 +219,11 @@ export default {
         }
 
         const seed = String(body.seed || '').slice(0, 200);
+        const theme = String(body.theme || '').slice(0, 100);
         const avoid = Array.isArray(body.avoid) ? body.avoid.slice(0, 20).map(x => String(x).slice(0, 80)).filter(Boolean) : [];
         const age = ['family', 'kids', 'teens', 'adults'].includes(body.age) ? body.age : '';
 
-        const categories = await suggestCategoryNames(env.ANTHROPIC_API_KEY, { seed, avoid, age });
+        const categories = await suggestCategoryNames(env.ANTHROPIC_API_KEY, { seed, avoid, age, theme });
 
         const newUsed = await commitUsage(env, gate.key, gate.used, SUGGEST_COST);
         return new Response(JSON.stringify({ ok: true, categories, used: newUsed, cap: gate.cap }), { headers });
@@ -429,7 +430,7 @@ const AGE_HINT = {
   adults: ' Aim them at an adult pub crowd (18+), but nothing explicit or offensive.',
 };
 
-async function suggestCategoryNames(apiKey, { seed, avoid, age }) {
+async function suggestCategoryNames(apiKey, { seed, avoid, age, theme }) {
   const tool = {
     name: 'return_categories',
     description: 'Return short, punchy trivia round category name ideas.',
@@ -442,10 +443,16 @@ async function suggestCategoryNames(apiKey, { seed, avoid, age }) {
     },
   };
 
-  const prompt = (seed
-    ? 'Suggest 5 fresh, more specific/niche pub-trivia round category ideas that drill deeper into or riff on this one: "' + seed + '". Go more specific and surprising, not broader.'
-    : 'Suggest 5 fun, surprising pub-trivia round category ideas - a mix of well-known and delightfully unexpected angles.'
-  ) + ' Short, punchy names (2-6 words each), no explanations.' +
+  let prompt;
+  if (seed) {
+    prompt = 'Suggest 5 fresh, more specific/niche pub-trivia round category ideas that drill deeper into or riff on this one: "' + seed + '". Go more specific and surprising, not broader.';
+    if (theme) prompt += ' Stay within the overall theme: "' + theme + '".';
+  } else if (theme) {
+    prompt = 'Suggest 5 fun, surprising pub-trivia round category ideas themed around "' + theme + '" - a mix of obvious and delightfully unexpected angles within that theme. Every idea must clearly relate to the theme.';
+  } else {
+    prompt = 'Suggest 5 fun, surprising pub-trivia round category ideas - a mix of well-known and delightfully unexpected angles.';
+  }
+  prompt += ' Short, punchy names (2-6 words each), no explanations.' +
     (AGE_HINT[age] || '') +
     (avoid.length ? ('\nAvoid repeating (already used in this game): ' + avoid.join(', ') + '.') : '');
 

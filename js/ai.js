@@ -207,12 +207,13 @@
   // Returns a Promise<string[]> of 5 category ideas. seed: drill deeper
   // into a specific idea, or "" for a fresh top-level batch. avoid: round
   // names already in this game, so suggestions stay fresh. age: bias
-  // suggestions to a round's audience.
-  async function suggestCategories(seed, avoid, age) {
+  // suggestions to a round's audience. theme: optional free-text theme
+  // (e.g. "Halloween") to steer every idea toward, even fresh batches.
+  async function suggestCategories(seed, avoid, age, theme) {
     requireActive();
     let data;
     try {
-      data = await call("suggest_categories", { seed: seed || "", avoid: avoid || [], age: age || "" });
+      data = await call("suggest_categories", { seed: seed || "", avoid: avoid || [], age: age || "", theme: theme || "" });
     } catch (e) {
       throw new Error("Couldn't reach the AI generator - check your connection and try again.");
     }

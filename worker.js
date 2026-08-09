@@ -312,7 +312,15 @@ export default {
 
 // ---- Anthropic calls -------------------------------------------------------
 
-async function callAnthropic(apiKey, { prompt, tool, maxTokens }) {
+async function callAnthropic(apiKey, { prompt, tool, maxTokens, temperature }) {
+  const body = {
+    model: MODEL,
+    max_tokens: maxTokens,
+    messages: [{ role: 'user', content: prompt }],
+    tools: [tool],
+    tool_choice: { type: 'tool', name: tool.name },
+  };
+  if (temperature !== undefined) body.temperature = temperature;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -320,13 +328,7 @@ async function callAnthropic(apiKey, { prompt, tool, maxTokens }) {
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-      tools: [tool],
-      tool_choice: { type: 'tool', name: tool.name },
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error('Anthropic API error: ' + res.status);
   const data = await res.json();
@@ -399,9 +401,14 @@ async function generateQuestions(apiKey, { topic, mode, format, count, age, diff
     formatInstructions +
     (AGE_INSTRUCTIONS[age] || '') +
     (DIFFICULTY_INSTRUCTIONS[difficulty] || '') +
-    '\nQuestions must be factually correct and suitable for reading aloud at a live trivia night.';
+    '\nAccuracy matters most: use only well-established, verifiable facts. If you are not fully' +
+    ' confident a date, name, statistic, or other specific detail is correct, do not guess or' +
+    ' invent it - pick a different question or angle you are sure about instead.' +
+    '\nQuestions must be suitable for reading aloud at a live trivia night.';
 
-  const out = await callAnthropic(apiKey, { prompt, tool, maxTokens: 1536 });
+  // Low temperature: this is a factual-recall task, not a creative-writing one -
+  // favor the model's most likely (best-supported) answer over variety.
+  const out = await callAnthropic(apiKey, { prompt, tool, maxTokens: 1536, temperature: 0.3 });
   let questions = out.questions;
   if (!Array.isArray(questions) || questions.length === 0) throw new Error('Empty result.');
 

@@ -222,6 +222,24 @@
     return data.categories;
   }
 
+  // Returns a Promise<{question, answer, category}> for one AI-written
+  // tiebreaker (a "closest answer wins" question with a precise numeric
+  // answer). seed: optional free-text topic to steer it (e.g. "Movies");
+  // category is a short label (e.g. "Movies") for what came back, so the
+  // caller can tell the host what they got.
+  async function generateTiebreaker(seed, age) {
+    requireActive();
+    let data;
+    try {
+      data = await call("generate_tiebreaker", { seed: seed || "", age: age || "" });
+    } catch (e) {
+      throw new Error("Couldn't reach the AI generator - check your connection and try again.");
+    }
+    applyUsage(data);
+    if (!data.ok) throw new Error(data.error || "Couldn't generate a tiebreaker.");
+    return { question: data.question, answer: data.answer, category: data.category };
+  }
+
   function init() {
     loadLicense();
     bindCard();
@@ -229,5 +247,5 @@
     if (lic.key) checkStatus();
   }
 
-  window.TGP_AI = { init, generateForRound, suggestCategories };
+  window.TGP_AI = { init, generateForRound, suggestCategories, generateTiebreaker };
 })();

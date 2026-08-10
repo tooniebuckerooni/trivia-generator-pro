@@ -22,6 +22,7 @@
 // unit, unrelated to LLM/API tokens) from the license's credit balance.
 //   - suggest_categories: 1 credit for a batch of 5 category ideas.
 //   - generate: 2 credits for a batch of up to 10 Q&A pairs.
+//   - generate_tiebreaker: 1 credit for a single numeric-answer question.
 // Credits come from a one-time pack (size set by TIER_CAPS) and PERSIST until
 // spent — they never reset. Buying another pack issues a new license key with
 // its own fresh balance, so a host tops up by activating the new key.
@@ -59,6 +60,7 @@ const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_QUESTIONS_PER_CALL = 10;
 const GENERATE_COST = 2;
 const SUGGEST_COST = 1;
+const TIEBREAKER_COST = 1;
 
 function getAllowedOrigin(request) {
   const origin = request.headers.get('Origin') || '';
@@ -230,6 +232,32 @@ export default {
       } catch (e) {
         console.error('suggest_categories error:', e.message);
         return new Response(JSON.stringify({ ok: false, error: 'Suggestion failed - please try again.' }), { headers });
+      }
+    }
+
+    // --- GENERATE_TIEBREAKER (fail CLOSED: real API cost) ---
+    if (action === 'generate_tiebreaker') {
+      try {
+        const gate = await checkLicenseAndReserve(env, license_key, instance_id, TIEBREAKER_COST);
+        if (!gate.ok) {
+          return new Response(JSON.stringify({ ok: false, error: gate.error, used: gate.used, cap: gate.cap }), { headers });
+        }
+        if (!env.ANTHROPIC_API_KEY) {
+          return new Response(JSON.stringify({ ok: false, error: 'AI generation is not configured on the server.' }), { headers });
+        }
+
+        const seed = String(body.seed || '').slice(0, 100);
+        const age = ['family', 'kids', 'teens', 'adults'].includes(body.age) ? body.age : '';
+
+        const tb = await generateTiebreaker(env.ANTHROPIC_API_KEY, { seed, age });
+
+        const newUsed = await commitUsage(env, gate.key, gate.used, TIEBREAKER_COST);
+        return new Response(JSON.stringify({
+          ok: true, question: tb.question, answer: tb.answer, category: tb.category, used: newUsed, cap: gate.cap,
+        }), { headers });
+      } catch (e) {
+        console.error('generate_tiebreaker error:', e.message);
+        return new Response(JSON.stringify({ ok: false, error: 'Tiebreaker generation failed - please try again.' }), { headers });
       }
     }
 
@@ -460,4 +488,37 @@ async function suggestCategoryNames(apiKey, { seed, avoid, age, theme }) {
   const categories = out.categories;
   if (!Array.isArray(categories) || categories.length === 0) throw new Error('Empty result.');
   return categories;
+}
+
+async function generateTiebreaker(apiKey, { seed, age }) {
+  const tool = {
+    name: 'return_tiebreaker',
+    description: 'Return one pub-trivia "closest answer wins" tiebreaker question with a precise numeric answer.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string' },
+        answer: { type: 'string' },
+        category: { type: 'string', description: 'A short 1-4 word label for what the question is about, e.g. "Movies".' },
+      },
+      required: ['question', 'answer', 'category'],
+    },
+  };
+
+  const prompt = 'Write one "closest answer wins" pub-trivia tiebreaker question.' +
+    ' It must have a single precise, verifiable NUMERIC answer (a year, a count, a measurement, a duration, etc.) - never something that requires guessing an approximate or debatable fact.' +
+    (seed
+      ? ' Base it on this seed/topic: "' + seed + '".'
+      : ' Pick any well-known, broadly appealing subject.') +
+    ' Also return a short 1-4 word "category" label describing what it\'s about (e.g. "Movies", "US History", "Music").' +
+    (AGE_HINT[age] || '') +
+    ' The question should read naturally aloud, and the answer must be just the number, optionally with a simple unit (e.g. "151 feet", "1989", "88").' +
+    '\nAccuracy matters most: use only a well-established, verifiable figure. If you are not fully confident in a specific number, pick a different question you are sure about instead.';
+
+  const out = await callAnthropic(apiKey, { prompt, tool, maxTokens: 300, temperature: 0.4 });
+  const question = String(out.question || '').trim();
+  const answer = String(out.answer || '').trim();
+  const category = String(out.category || '').trim();
+  if (!question || !answer) throw new Error('Empty result.');
+  return { question, answer, category };
 }

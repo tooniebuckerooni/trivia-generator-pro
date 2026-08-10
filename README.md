@@ -1,3 +1,10 @@
+> **This repo is retired for active development (2026-08-10).** The app and
+> its AI backend now live in the `tooniebuckerooni/fat-city-entertainment`
+> repo (`trivia-show-maker/` and `tgp-ai-gateway/`) and are served at
+> [fatcityentertainment.com/trivia-show-maker/](https://www.fatcityentertainment.com/trivia-show-maker/).
+> This copy and its GitHub Pages deployment are kept as a historical/MIT
+> reference and are no longer updated.
+
 # Trivia Generator Pro 🎲
 
 **Build it. Brand it. Print it. Host it.**
